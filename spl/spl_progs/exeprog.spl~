@@ -1,0 +1,2 @@
+print "Exception has occured";
+halt;

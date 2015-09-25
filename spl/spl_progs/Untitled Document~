@@ -1,0 +1,60 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP/512) ]) * 512+ ( SP % 512);
+alias syscall S1;
+syscall=[physicalSP-1];
+if (syscall == 5) then //implement write system call
+   alias filedescriptor S2;
+   filedescriptor = [physicalSP-3];
+   
+   if (( filedescriptor > 7) || ( filedescriptor < 0)) then
+      print "IVFD";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   
+   alias PID S3;
+   PID = (PTBR-1024)/8;
+   alias PPFTstart S4;
+   PPFTstart = READY_LIST + PID*32 +15;
+   alias swotindex S5;
+   swotindex = [PPFTstart + 2*filedescriptor];
+   alias lseek S6;
+   lseek = [PPFTstart+ 2*filedescriptor + 1];
+   if ( swotindex == -1 ) then
+      print "FILEnotOpen";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   alias fatindex S7;
+   fatindex = [ FILE_TABLE + swotindex ];
+   alias basicblock S8;
+   basicblock = [fat+fatindex+2];
+   load (1,basicblock);
+   alias datablock S9;
+   datablock = [512+(lseek/512)];
+   if ( datablock == -1) then //allocate a new datablock
+      datablock=24;
+      while (datablock < 448) do
+            if ([DISK_LIST+datablock]==0) then
+               print "FREEDATBlkFND";
+               break;
+            endif;
+         datablock=datablock+1;
+       endwhile;
+      
+      if (datablock == 448) then 
+      print "NOFreeBlk";
+      [physicalSP-2]=-1;
+      irteurn;      
+      endif;
+         
+     [DISK_LIST+datablock] =1;
+     [512+(lseek/512)]=datablock;
+     store (1,basicblock);
+     [FAT+fatindex+1]=[FAT+fatindex+1]+512;
+     store(5,19);
+     store(6,20);
+    endif;
+  load(1,datablock);
+    
+endif;

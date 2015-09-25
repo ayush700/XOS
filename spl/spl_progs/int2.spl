@@ -1,0 +1,112 @@
+//open and close system call
+alias physicalSP S0;
+physicalSP =( [PTBR + 2 * (SP/512)] * 512 ) + SP%512;
+alias syscallno S1;
+syscallno = [physicalSP-1];
+if (syscallno == 2) then //open system call
+   alias filename S2;
+   filename=[physicalSP-3];
+   alias fatindex S3;
+   fatindex=0;
+   while (fatindex < 512 ) do
+      if([FAT+fatindex] == filename) then
+         print "FileInFAT";
+         break;
+      endif;
+      fatindex=fatindex+8;
+   endwhile;
+   if (fatindex == 512 ) then
+      print "NoFATentry";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   //at this point a fat index for the given file is found
+   //search the SWOT
+   alias swotindex S4;
+   swotindex=0;
+   while (swotindex < 128) do
+      if([swotindex+FILE_TABLE]==fatindex) then
+         break;
+      endif;
+      if ([FILE_TABLE+swotindex]==-1) then
+         break;
+      endif;
+      swotindex=swotindex+2;
+   endwhile;
+   if (swotindex==128) then
+      print "NoSWOTspace";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   alias PID S5;
+   //at this point the swot may or may not have the file entry
+   PID = ((PTBR-1024)/8);
+   alias PPFTstart S6;
+   PPFTstart=READY_LIST+32*PID+15;
+   alias PPFTindex S7;
+   PPFTindex=0;
+   while ( PPFTindex < 16) do
+      if ([PPFTstart+PPFTindex]==swotindex) then
+         break;   
+      endif;
+      if ([PPFTstart+PPFTindex]==-1) then
+         [PPFTstart+PPFTindex]=swotindex;
+         [PPFTstart+PPFTindex+1]=0;
+         break;
+      endif;
+   PPFTindex=PPFTindex+2;    
+   endwhile; 
+   if (PPFTindex == 16) then
+      print "PPOTFull";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   //the PPOT Table entries are ready if -1 the entries are set else simple break out of the loop
+   ///if new swot rntry is being made;
+   if ([FILE_TABLE+swotindex]==-1) then
+      [FILE_TABLE+swotindex]=fatindex;
+      [FILE_TABLE+swotindex+1]=0;
+   endif;
+      [FILE_TABLE+swotindex+1]=[FILE_TABLE+swotindex+1]+1;
+      PPFTindex=PPFTindex/2;
+      [physicalSP-2]=PPFTindex;
+      print "FileOpend";
+      ireturn;
+endif;
+//close system call
+if (syscallno ==3 ) then //close system call
+   alias filedescriptor S2;
+   filedescriptor = [physicalSP-3];
+   if (( filedescriptor < 0) || ( filedescriptor > 7)) then
+      print "IVDescriptor";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   alias PID S3;
+   PID = ((PTBR-1024)/8);
+   alias PPFTstart S4;
+   PPFTstart =READY_LIST+32*PID+15;
+   alias PPFTindex S5;
+   PPFTindex=0;
+   if ([PPFTstart+2*filedescriptor]==-1) then
+      print "FileNotOpen";
+      [physicalSP-2]=-1;
+      ireturn;
+   endif;
+   alias swotindex S6;
+   swotindex=[PPFTstart+2*filedescriptor];
+   [FILE_TABLE+swotindex+1]=[FILE_TABLE+swotindex+1]-1; 
+   //check if the file is completely closed if yes then remove it from swot
+   if ([FILE_TABLE+swotindex+1] == 0) then
+   [FILE_TABLE+swotindex]=-1;
+   endif;
+   [PPFTstart+2*filedescriptor]=-1;
+   [PPFTstart+2*filedescriptor+1]=-1;
+   print "FileClosed";
+   [physicalSP-2]=0;
+   
+   ireturn;
+endif;
+[physicalSP-2]=-1;
+print "IVSYSCALL";
+ireturn;

@@ -1,0 +1,57 @@
+alias physicalSP S0;
+physicalSP = ( [PTBR+2*(SP/512)] * 512 ) + SP%512;
+alias syscal_no S1;
+alias arg1 S2;
+syscal_no = [physicalSP-1];
+if (syscal_no==1) then
+arg1 = [physicalSP-3];
+alias i S5; 
+i = 0;
+while (i<=64) do
+	if ([FAT+i*8] == arg1) then
+		[physicalSP-2]=0; // File already exists in the table
+		ireturn;
+	endif;
+	i=i+1;
+endwhile;
+alias temp S4;
+i=0;
+while ( i < 448) do
+	if ([DISK_LIST+i]==0) then //DISK_LIST dsk free list first entry
+		S4=DISK_LIST+i;
+		break;
+	endif;
+	i=i+1;
+endwhile;
+if (i==448) then
+	[physicalSP-2]=-1; //no disk free list found
+	ireturn; 
+endif;
+i=0;
+while (i<=64) do
+	if([FAT+i*8]==-1) then
+		temp=i;
+		break;
+	endif;
+endwhile;
+if(i==64) then
+	[physicalSP-2]=-1; //no empty FAT table entry found
+	ireturn; 
+endif;
+[FAT+i*8]=arg1;
+[FAT+i*8+1]=0;
+[FAT+i*8+2]=S4;
+load (1,S4);
+alias counter S6;
+counter=0;
+while (counter < 256 ) do
+       [counter + 512] = -1;
+       counter = counter + 1;
+endwhile;
+store(1,S4);
+[S4+DISK_LIST] = 1;
+[physicalSP-2 ] = 0;
+store(5,19);  //FAT table entry
+store(6,20); //Disk free table
+endif;
+ireturn;

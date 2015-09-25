@@ -1,0 +1,51 @@
+//load(7,1);load exception handler from disk block 1 to page 7
+//load(8,2);load exception handler from disk block 2 to page 8
+load(23,17);//load interrupt routine from disk block 17 to page 23
+load(24,18);//load interrupt routine from disk block 18 to page 24
+load(5,19); //load the FAT table entry
+load(6,20); //load the DF list entry
+//************ Setting up entries for the System wide open file table *******
+alias counter S0;
+counter=0;
+while (counter < 128 ) do      // only 64 files can open
+      [FILE_TABLE + counter + 0]=-1; //FAT index
+      [FILE_TABLE + counter + 1]=0;  //FILE open 
+      counter = counter + 2;
+endwhile;
+//READY_LIST has the starting address of PCB
+breakpoint;
+[READY_LIST + 0]=0;//set PID Of INIT process to 0 val of const 1536
+counter = 15;
+//********** Setting up entries for Per Process open file table ******
+while (counter < 31) do
+   [READY_LIST + counter]=-1; //swat and lseek set to -1
+   counter=counter+1;
+endwhile;   
+load(25,21);//load 1st page of code from disk 21 to memory 25
+load(26,22);//Load 2nd page of code from disk 22 to memory 26
+load(27,23);//Load 3rd page of code from disk 23 to memory 27
+PTBR = 1024;//Since PID of INIT is 0, PTBR value of INIT is set as 1024
+PTLR = 4;//Every process consists of four pages. Three pages are for storing code and one page for the stack
+breakpoint;
+[PTBR + 0] = 25;//Physical Page Number for Logical Page 0 
+[PTBR + 1] = "01";//Auxiliary Information for Logical Page 0
+[PTBR + 2] = 26; 
+[PTBR + 3] = "01";
+[PTBR + 4] = 27; 
+[PTBR + 5] = "01";
+[PTBR + 6] = 28;// Physical Page Number for Logical Page 3 (Stack) 
+[PTBR + 7] = "01";// Auxiliary Information for Logical Page 3 (Stack)
+[READY_LIST + 1]=2;//Sets the entry for STATE as Running 
+breakpoint;
+SP=3*512;//SP must be set to its starting logical address ( 3 * 512 = 1536)
+[28*512] = 0;//Set up the IP value for INIT in the stack 
+load(11,5); 
+load(12,6);            //loads interrupt routine 1
+load(13,7);
+load(14,8);            //loads interrupt routine 2 
+load(15,9);
+load(16,10);           //loads interrupt routine 3
+load(17,11);
+load(18,12);           //loads interrupt routine 4
+breakpoint;
+ireturn;
